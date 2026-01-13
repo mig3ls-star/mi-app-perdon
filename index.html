@@ -1,0 +1,693 @@
+import React, { useState, useEffect } from 'react';
+import { BookOpen, Heart, ArrowLeft, PenTool, RefreshCw, Info, Feather, X, HelpCircle, Download, FileText, Sparkles, Loader } from 'lucide-react';
+
+// --- CONFIGURACIÓN GEMINI API ---
+const apiKey = ""; 
+
+// --- [ZONA_0: IDENTIFICADORES DE ANCLAJE] ---
+/* ESTA SECCIÓN DEFINE LAS FRONTERAS DEL CÓDIGO PARA IA.
+  - @ZONA_DATA: Contenido del Método P.E.R.D.O.N. (Cartas, Frases, Mazos). NO REESCRIBIR SIN PERMISO.
+  - @ZONA_LOGIC: Funciones de estado, llamadas a API y lógica de navegación.
+  - @ZONA_COMPONENTS: Estructura visual y componentes de UI. [ACTUALIZACIÓN: Diseño de cartas con degradados laterales].
+  - @ZONA_RENDER: Método principal de renderizado y flujo de vistas.
+*/
+
+const callGemini = async (prompt) => {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error('Error al conectar con la IA');
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
+  } catch (error) {
+    console.error("Error Gemini:", error);
+    return "Lo siento, hubo un problema al conectar con tu coach virtual. Intenta de nuevo.";
+  }
+};
+
+// --- [ZONA_DATA: CONTENIDO Y MAZOS] ---
+
+const THEME_COLORS = {
+  percepcion: '#2A237C',
+  emocion: '#7C2355',
+  responsabilidad: '#234B6B',
+  desapego: '#6B4B7A',
+  oportunidad: '#3A7C55',
+  nutrir: '#7C4B3A',
+};
+
+const PHASES = {
+  exploracion: { title: "Fase 1: Exploración", color: "#1F5E9F", categories: ['percepcion', 'emocion'] },
+  aceptacion: { title: "Fase 2: Aceptación", color: "#FF9966", categories: ['responsabilidad', 'desapego'] },
+  integracion: { title: "Fase 3: Integración", color: "#663399", categories: ['oportunidad', 'nutrir'] }
+};
+
+const CATEGORIES = {
+  percepcion: {
+    id: 'percepcion',
+    letter: 'P',
+    name: 'Percepción',
+    phase: 'Exploración',
+    description: 'Explora cómo interpretamos nuestra realidad y las creencias que influyen en nuestras percepciones.',
+    color: THEME_COLORS.percepcion,
+    cards: [
+      { type: 'question', text: "¿Qué recuerdos o ideas me vienen a la mente cuando pienso en cómo me he visto hasta ahora? ¿De qué manera esta percepción influye en cómo me trato y cómo perdono a otros?" },
+      { type: 'question', text: "¿Qué historias me repito a menudo sobre mis experiencias? ¿Cómo afecta esta narrativa mis emociones actuales y mi disposición para dejar ir el pasado?" },
+      { type: 'question', text: "¿Cómo he interpretado ciertas situaciones o personas en mi vida? ¿Qué nuevas perspectivas podrían ayudarme a liberarme de las percepciones que limitan mi paz interior?" },
+      { type: 'question', text: "¿Qué palabras me digo cuando enfrento recuerdos difíciles? ¿Cómo puedo reformular esta voz interna para fomentar el perdón y mi propio bienestar?" },
+      { type: 'question', text: "¿Qué emociones o sensaciones percibo cuando imagino un cambio profundo en mi forma de ver el pasado? ¿Cómo podría alinear mis pensamientos and acciones con una visión más compasiva?" },
+      { type: 'question', text: "¿Cómo siento en mi cuerpo las ideas que considero inamovibles? ¿Qué pasaría si dejara ir estas creencias y permitiera una nueva visión?" },
+      { type: 'question', text: "¿Qué recuerdos y pensamientos surgen al contemplar mi forma de ver el mundo? ¿Cómo influye esta “visión” en la manera en que experimento la vida?" },
+      { type: 'question', text: "¿Qué voces internas guían mis pensamientos cuando repito historias del pasado? ¿De qué manera esas narrativas afectan mi capacidad de ver el presente con claridad?" },
+      { type: 'phrase', text: "Mi percepción no es la verdad absoluta; hoy me permito cuestionarla y abrirme a nuevas posibilidades." },
+      { type: 'phrase', text: "La paz comienza cuando cuestiono mis juicios y permito ver con el corazón en lugar de los temores de mi mente." },
+      { type: 'phrase', text: "Soltar mis historias me libera; cada momento sin juicio es un espacio para la paz." },
+      { type: 'phrase', text: "Perdonar mis percepciones limitantes es elegir ver con claridad y sin las sombras del pasado." },
+      { type: 'phrase', text: "La paz no surge de defender una verdad, sino de liberar la necesidad de tenerla." },
+      { type: 'phrase', text: "Cada vez que cuestiono mis creencias, me acerco a una paz que no depende de tener razón." },
+      { type: 'phrase', text: "Mis percepciones no son mi verdad; al ver más allá de ellas, encuentro la libertad de ser." },
+      { type: 'phrase', text: "Observar sin juzgar me permite experimentar la paz que está presente en cada momento." },
+      { type: 'phrase', text: "Cuestionar mi percepción es una puerta a la paz; cada mirada sin juicio me acerca más a mí mismo." },
+      { type: 'phrase', text: "Mi paz crece en la medida en que libero las interpretaciones que me atan a lo que ya no es." },
+      { type: 'phrase', text: "La verdadera paz no se encuentra en tener respuestas, sino en la libertad de ver sin expectativas." },
+      { type: 'phrase', text: "Cada vez que elijo ver sin barreras, me libero de la carga de defender creencias que limitan mi paz." },
+      { type: 'wildcard', text: "Deja de ver el mundo con los ojos de tus miedos y juicios. Suelta la necesidad de tener razón y permite que la verdad se revele sola. Mira sin filtros, o sigue en la oscuridad." },
+      { type: 'wildcard', text: "Abandona las historias que te has contado y observa sin resistencia. La paz está en la mirada limpia, no en la mente que decide lo que debería ver." },
+      { type: 'wildcard', text: "No busques paz in lo que ves. Cambia la manera in que miras, o permanece encadenado a tus creencias. La paz no está afuera, está in tu visión." },
+      { type: 'wildcard', text: "El perdón comienza en la forma en que elijo ver; al soltar mis juicios, abro espacio para la paz que siempre estuvo ahí. Me permito ver más allá de mis interpretaciones con amor." },
+      { type: 'wildcard', text: "Al cambiar mi percepción, libero las barreras que construí para protegerme. Elijo ver con una visión amorosa, permitiendo que la paz transforme mi manera de observar." },
+      { type: 'wildcard', text: "Perdonar es ver con ojos nuevos y con un corazón libre de juicio. Hoy suelto los filtros que limitan mi paz y abro mi mente a la comprensión." },
+      { type: 'wildcard', text: "No busques paz en lo que ves. Cambia la manera en que miras, o permanece encadenado a tus creencias. La paz no está afuera, está en tu visión." }
+    ]
+  },
+  emocion: {
+    id: 'emocion',
+    letter: 'E',
+    name: 'Emoción',
+    phase: 'Exploración',
+    description: 'Conéctate con las emociones y aprende a aceptarlas sin juicios.',
+    color: THEME_COLORS.emocion,
+    cards: [
+      { type: 'question', text: "¿Qué emociones me resisto a aceptar y cómo influyen en mi capacidad de dejar atrás situaciones del pasado? ¿Qué necesito para verlas con comprensión?" },
+      { type: 'question', text: "¿Cuando surge una emoción intensa hacia alguien o algo, ¿qué parte de mí está buscando sanar? ¿Cómo puedo observar esta emoción con compasión sin juzgarme?" },
+      { type: 'question', text: "¿Dóde siento las emociones que aún no he perdonado en mi cuerpo? ¿Qué podría cambiar si las dejo fluir sin resistencia, aceptándolas como parte de mi sanación?" },
+      { type: 'question', text: "¿Qué “voz interna” acompaña mis emociones de resentimiento o frustración? ¿Cómo puedo permitir que esa voz se exprese sin juzgarla, pero también sin aferrarme a ella?" },
+      { type: 'question', text: "¿Qué emociones tiendo a suprimir en lugar de explorar? ¿Cómo podrían estas emociones reflejar una parte de mí que necesita perdonar o perdonarse?" },
+      { type: 'question', text: "¿Cómo influyen en mis relaciones las emociones que no expreso? ¿Qué me está mostrando esta situación sobre la necesidad de soltar y permitir que el perdón traiga paz?" },
+      { type: 'phrase', text: "Al permitirme sentir mis emociones sin resistencia, abro un espacio de paz en el que el perdón puede florecer y transformar mi vida." },
+      { type: 'phrase', text: "Cada emoción es una puerta hacia la comprensión; al aceptarlas, me acerco a la paz que busco." },
+      { type: 'phrase', text: "Mis emociones no son mi enemigo; al darles espacio, libero el peso que han sostenido en mí." },
+      { type: 'phrase', text: "Aceptar mis emociones es perdonarme; el amor propio surge al permitirme sentir sin juicio." },
+      { type: 'phrase', text: "La paz no llega al suprimir lo que siento, sino al abrazarlo con compasión y libertad." },
+      { type: 'phrase', text: "Mis emociones son mensajeras; al escucharlas, permito que su carga se disuelva en comprensión." },
+      { type: 'wildcard', text: "Deja de huir de tus emociones y enfréntalas. Nada de lo que sientes es tu enemigo. Siéntelo todo, o vive atrapado en el miedo a sentir." },
+      { type: 'wildcard', text: "Mira tus emociones a la cara y diles: 'Te veo'. No intentes cambiarlas, solo reconócelas. La paz no está en la calma, sino en la aceptación del caos interno." },
+      { type: 'wildcard', text: "Tus emociones son el mapa hacia tu sanación. Si las ignoras, te pierdes el camino. Si las abrazas, encuentras la salida. Tú decides." },
+      { type: 'wildcard', text: "Al aceptar mis emociones, abro la puerta al perdón y a la paz interior; cada sentimiento es una oportunidad para sanar mi relación conmigo mismo." },
+      { type: 'wildcard', text: "Mis emociones son parte de mi camino; al permitirles ser, descubro la paz que surge de la aceptación profunda y amorosa de mi propio ser." },
+      { type: 'wildcard', text: "Hoy elijo abrazar mis emociones con ternura, reconociendo que cada una de ellas es un paso hacia una vida más plena y en paz." }
+    ]
+  },
+  responsabilidad: {
+    id: 'responsabilidad',
+    letter: 'R',
+    name: 'Responsabilidad',
+    phase: 'Aceptación',
+    description: 'Asume la responsabilidad de tus pensamientos y acciones para recuperar tu poder.',
+    color: THEME_COLORS.responsabilidad,
+    cards: [
+      { type: 'question', text: "¿De qué manera me he responsabilizado de la paz o la perturbación en mis relaciones? ¿Qué podría cambiar si acepto mi papel en la dinámica que vivo con los demás?" },
+      { type: 'question', text: "¿Cuando me enfrento a un conflicto, ¿qué pensamientos asumo automáticamente? ¿Qué parte de mí está eligiendo estos pensamientos y cómo puedo replantearlos con una visión de paz?" },
+      { type: 'question', text: "¿Cuánto poder le doy a mis emociones para definir cómo actúo? ¿De qué manera puedo asumir la responsabilidad de regularlas sin reprimirlas?" },
+      { type: 'question', text: "¿En qué situaciones siento que culpo a otros por mis reacciones? ¿Qué paso puedo dar para asumir mis respuestas y soltar el hábito de culpar?" },
+      { type: 'question', text: "¿Qué aspectos de mi vida he descuidado y cómo afecta esto mi bienestar? ¿Qué pasaría si asumiera el compromiso de cuidarme más profundamente?" },
+      { type: 'question', text: "¿Qué expectativas no cumplidas me hacen sentir decepción? ¿Estoy dispuesto a liberar estas expectativas para encontrar paz en mi interior?" },
+      { type: 'phrase', text: "Al aceptar mi papel en cada experiencia, transformo la forma en que percibo el mundo y cultivo la serenidad." },
+      { type: 'phrase', text: "Hoy decido que la responsabilidad es un acto de amor hacia mí mismo, una oportunidad para crear la vida que deseo vivir." },
+      { type: 'phrase', text: "Cada situación es una invitación a ver cómo puedo contribuir a la paz o a la inquietud en mi vida." },
+      { type: 'phrase', text: "Cuando dejo de culpar y asumo mi poder, descubro una fuerza interior que trasciende las circunstancias." },
+      { type: 'phrase', text: "La verdadera libertad nace de la voluntad de responder con amor y responsabilidad en cada experiencia." },
+      { type: 'phrase', text: "Mi vida cambia cuando acepto que mis pensamientos crean mi realidad; en cada decisión puedo cultivar paz." },
+      { type: 'wildcard', text: "Deja de buscar culpables. Cada vez que culpas a alguien, entregas tu poder. Recupéralo asumiendo tu parte, o sigue siendo un espectador de tu propia vida." },
+      { type: 'wildcard', text: "Tu vida es el resultado de tus elecciones, no de tus circunstancias. Si no te gusta lo que ves, cambia de elección. La responsabilidad es tu libertad." },
+      { type: 'wildcard', text: "Asumir la responsabilidad no es cargar con una culpa, es tomar las riendas de tu paz. Deja de esperar que el mundo cambie para sentirte bien." },
+      { type: 'wildcard', text: "Al hacerme responsable de mis percepciones, recupero mi poder para elegir la paz; el perdón es el puente hacia una vida creada desde el amor." },
+      { type: 'wildcard', text: "La responsabilidad personal es el primer paso hacia la liberación. Al elegir cómo respondo, elijo el camino de la paz y el bienestar." },
+      { type: 'wildcard', text: "Hoy asumo con amor la autoría de mi experiencia. Al elegir pensamientos de paz, transformo mi realidad y mi relación con el mundo." }
+    ]
+  },
+  desapego: {
+    id: 'desapego',
+    letter: 'D',
+    name: 'Desapego',
+    phase: 'Aceptación',
+    description: 'Suelta el pasado y libera expectativas que limitan tu crecimiento.',
+    color: THEME_COLORS.desapego,
+    cards: [
+      { type: 'question', text: "¿Qué situaciones de mi vida me resulta difícil dejar atrás? ¿Qué podría aprender de mí mismo al soltar el apego a estas experiencias?" },
+      { type: 'question', text: "¿En qué aspectos de mi vida he creado expectativas que me causan sufrimiento? ¿Qué parte de mí se siente más segura al soltar estas expectativas?" },
+      { type: 'question', text: "¿Qué creencias sigo defendiendo, aunque ya no me sirvan? ¿Qué podría ganar si acepto que es momento de liberarlas?" },
+      { type: 'question', text: "¿Cómo influiryn los recuerdos que guardo del pasado en mis decisiones presentes? ¿Qué paso puedo dar para liberarme del peso de estos recuerdos?" },
+      { type: 'question', text: "¿Qué imágenes o pensamientos surgen cuando pienso in dejar ir lo que ya no me beneficia? ¿Qué significa para mí estar libre de estos apegos?" },
+      { type: 'question', text: "¿Cuánto de mi energía dedico a preocuparme por cosas que no puedo controlar? ¿Cómo podría redirigir esa energía hacia algo que me aporte paz?" },
+      { type: 'question', text: "¿Qué emociones emergen cuando intento soltar algo que he guardado por mucho tiempo? ¿Qué me muestran estas emociones sobre mi resistencia a liberar?" },
+      { type: 'question', text: "¿Cuáles son las razones por las que me aferro a situaciones o personas del pasado? ¿Cómo cambiaría mi vida si estuviera dispuesto a dejarlas ir?" },
+      { type: 'question', text: "¿De qué manera el apego a mis ideas de quién soy limita mi crecimiento? ¿Qué podría suceder si permito que mi identidad evolucione sin ataduras?" },
+      { type: 'question', text: "¿Qué “peso” emocional continúo cargando a diario? ¿Qué significa para mí vivir sin ese peso?" },
+      { type: 'question', text: "¿Qué pensamientos suelo revivir aunque sé que no me traen paz? ¿Cómo puedo honrar el pasado sin necesidad de retenerlo?" },
+      { type: 'question', text: "¿Qué miedos me surgen al considerar el desapego? ¿Qué me enseña este miedo sobre lo que realmente valoro in mi vida?" },
+      { type: 'phrase', text: "La libertad comienza en el momento en que me permito dejar ir lo que ya no resuena con mi paz interior." },
+      { type: 'phrase', text: "Al soltar las expectativas, me abro a recibir lo que la vida tiene para ofrecerme con gratitud y aceptación." },
+      { type: 'phrase', text: "Cada vez que libero algo que ya no me sirve, me acerco más a mi esencia y a mi verdadero ser." },
+      { type: 'phrase', text: "El desapego no significa perder; significa ganar la paz que no se encuentra en lo que intento retener." },
+      { type: 'phrase', text: "Hoy decido vivir sin las ataduras de mis antiguas percepciones; in cada liberación encuentro la paz que he estado buscando." },
+      { type: 'phrase', text: "El pasado no puede retenerme si elijo vivir in el presente con una mente abierta y un corazón in paz." },
+      { type: 'phrase', text: "Cuando dejo de aferrarme a lo que no controlo, todo comienza a fluir in sintonia con el universo." },
+      { type: 'phrase', text: "Cuando dejo de aferrarme a lo que no controlo, recupero el poder de vivir con paz y libertad." },
+      { type: 'phrase', text: "Al permitir que las situaciones fluyan, encuentro la serenidad in lo que permanece, in lugar de lo que se va." },
+      { type: 'phrase', text: "El desapego es un acto de confianza; confo in que al soltar, todo se ordena in armonía con mi bienestar." },
+      { type: 'phrase', text: "No necesito retener ni temer al cambio; in cada soltura descubro una fortaleza que crece con cada paso." },
+      { type: 'phrase', text: "Hoy decido soltar lo que ya no me aporta paz, sabiendo que mi camino es más claro y ligero cuando me libero de aquello que ya cumplió su propósito." },
+      { type: 'wildcard', text: "Suelta lo que ya no es. Si intentas retener el pasado, solo consigues asfixiar tu presente. Abre las manos, deja que se vaya, o sigue cargando con un peso que no te pertenece." },
+      { type: 'wildcard', text: "Deja de aferrarte a tus heridas como si fueran tesoros. Si no las sueltas, no habrá espacio para nada nuevo. Vacía tus manos, o sigue encadenado." },
+      { type: 'wildcard', text: "El apego es una ilusión de seguridad. La verdadera seguridad está en confiar en el fluir de la vida. Suelta el control, o muere en el intento de retenerlo." },
+      { type: 'wildcard', text: "Perdonar es soltar las cadenas del pasado; al practicar el desapego, abro mi corazón a la paz del presente y a la libertad de ser." },
+      { type: 'wildcard', text: "Al liberar mis apegos, descubro que la paz siempre ha estado dentro de mí. El perdón me permite caminar ligero y con el corazón abierto." },
+      { type: 'wildcard', text: "Hoy elijo soltar lo que ya no me sirve, permitiendo que el perdón limpie mi camino y me devuelva la serenidad que merezco." }
+    ]
+  },
+  oportunidad: {
+    id: 'oportunidad',
+    letter: 'O',
+    name: 'Oportunidad',
+    phase: 'Integración',
+    description: 'Transforma obstáculos en herramientas de evolución y aprendizaje.',
+    color: THEME_COLORS.oportunidad,
+    cards: [
+      { type: 'question', text: "¿Qué situaciones difíciles podría sentir como oportunidades de aprendizaje in lugar de obstáculos? ¿Qué me revelan estas experiencias sobre mis capacidades internas?" },
+      { type: 'question', text: "¿En qué momentos he dejado pasar oportunidades de sentir paz por aferrarme a mis ideas? ¿Cómo podría abrirme a ver y escuchar desde una perspectiva más amplia?" },
+      { type: 'question', text: "¿Qué puedo descubrir sobre mí mismo si decido ver los desafíos como maestros? ¿Qué cualidades se fortalecen in mí al permitirme integrar estas lecciones?" },
+      { type: 'question', text: "¿Cómo influiría in mi vida ver cada circunstancia como una oportunidad para crecer? ¿Qué enseñanzas podrían surgir de este cambio de percepción?" },
+      { type: 'question', text: "¿Qué actitudes de resistencia suelo tener ante lo nuevo? ¿Cómo cambiaría mi experiencia si elijo ver cada momento como una oportunidad de paz?" },
+      { type: 'question', text: "¿Qué podría cambiar si veo cada interacción como una oportunidad para sanar y liberar cualquier resentimiento?" },
+      { type: 'phrase', text: "Nada se desperdicia in el camino de la paz; cada experiencia aporta claridad, aunque a veces llegue in forma de desafíos." },
+      { type: 'phrase', text: "Cuando elijo ver cada momento como una oportunidad, transformo el miedo in confianza y el juicio in comprensión." },
+      { type: 'phrase', text: "Al aceptar la vida como un proceso de aprendizaje continuo, encuentro serenidad in lo que antes percibía como un obtáculo." },
+      { type: 'phrase', text: "Las oportunidades de paz están siempre presentes; basta con abrir la mente para verlas incluso in medio de la confusión." },
+      { type: 'phrase', text: "Al aceptar cada instante como es, reconozco que la paz no depende de lo que sucede, sino de la forma in que elijo verlo." },
+      { type: 'phrase', text: "Cada situación que acepto con apertura se convierte in una guía que me ayuda a descubrir la paz que reside in mi interior." },
+      { type: 'wildcard', text: "Deja de quejarte por lo que te pasa y empieza a preguntarte para qué te pasa. Cada problema es una oportunidad disfrazada. Ábrela, o sigue tropezando con la misma piedra." },
+      { type: 'wildcard', text: "Si ves un muro, es que no estás buscando la puerta. Cada desafío es una invitación a crecer. Acéptala, o sigue escondiéndote detrás de tus excusas." },
+      { type: 'wildcard', text: "La vida te está enseñando algo, pero tú prefieres tener razón. Deja de pelear con la realidad y aprende la lección. Crece, o te hundes en la queja." },
+      { type: 'wildcard', text: "El perdón transforma cada experiencia en una oportunidad para ver con claridad y amar sin condiciones. Aprovecho cada instante para aprender." },
+      { type: 'wildcard', text: "Cada situación es una invitación al perdón y la comprensión. Hoy elijo ver los desafíos como oportunidades para expandir mi capacidad de amar." },
+      { type: 'wildcard', text: "Perdonar me permite ver cada momento como una lección. Aprendo a confiar en el proceso y a ver la paz en cada experiencia." }
+    ]
+  },
+  nutrir: {
+    id: 'nutrir',
+    letter: 'N',
+    name: 'Nutrir',
+    phase: 'Integración',
+    description: 'Promueve el autocuidado, la paciencia y la paz interior.',
+    color: THEME_COLORS.nutrir,
+    cards: [
+      { type: 'question', text: "¿De qué manera puedo nutrir mi paz interior cuando las circunstancias externas parecen caóticas? ¿Qué prácticas me ayudan a cultivar serenidad en mi vida?" },
+      { type: 'question', text: "¿Qué pensamientos o actitudes me nutren y me fortalecen emocionalmente? ¿Cómo puedo incorporar más de estos pensamientos en mi vida diaria?" },
+      { type: 'question', text: "¿Qué relación tengo con el autocuidado? ¿Qué puedo hacer para tratarme con la misma amabilidad y comprensión que ofrezco a los demás?" },
+      { type: 'question', text: "¿Qué emociones surgen cuando me permito recibir amor y cuidado? ¿Cómo podría abrirme a recibir sin sentir que debo dar algo a cambio?" },
+      { type: 'question', text: "¿Qué aspectos de mi vida necesitan más cuidado y atención? ¿De qué manera puedo nutrir esas áreas para que florezcan en armonía?" },
+      { type: 'question', text: "¿Qué importancia doy a la práctica de la gratitud? ¿Cómo puede esta práctica ayudarme a encontrar paz en los pequeños momentos?" },
+      { type: 'question', text: "¿Cómo podría fortalecer mi conexión con el presente a través de actos de autocuidado? ¿Qué cambios puedo hacer para sentirme en paz conmigo mismo?" },
+      { type: 'question', text: "¿Qué pensamientos o emociones me alejan de la paz? ¿Cómo puedo reemplazarlos por una actitud de amor y aceptación hacia mí mismo?" },
+      { type: 'question', text: "¿Qué actividades me permiten nutrir mi paz mental y emocional? ¿Cómo puedo crear espacio para ellas en mi vida?" },
+      { type: 'question', text: "¿Cómo puedo nutrir mis relaciones de forma que reflejen la paz y el amor que deseo experimentar en mi interior? ¿Qué puedo ofrecer desde mi propia paz?" },
+      { type: 'question', text: "¿Qué importancia tiene para mí el perdón hacia mí mismo como una forma de autocuidado? ¿Cómo influye en mi paz personal?" },
+      { type: 'question', text: "¿De qué manera puedo cultivar la gratitud por mi proceso de crecimiento? ¿Qué prácticas puedo adoptar para mantenerme conectado con una visión amorosa de mi vida?" },
+      { type: 'phrase', text: "Nutrir mi paz interior es el acto más generoso que puedo ofrecer a mi ser; en ella encuentro la fuerza para enfrentar cualquier circunstancia." },
+      { type: 'phrase', text: "El autocuidado es una invitación a reconectar con mi esencia; al nutrirme, reconozco mi valor y permito que florezca la paz en mí." },
+      { type: 'phrase', text: "Cada acto de amor hacia mí mismo fortalece la paz que comparto con el mundo." },
+      { type: 'phrase', text: "Mi paz interior crece cada vez que elijo cultivar la gratitud y la compasión hacia mí mismo y hacia los demás." },
+      { type: 'phrase', text: "La paz que busco afuera está presente en mi interior cuando nutro mi ser con comprensión y aceptación." },
+      { type: 'phrase', text: "La gratitud es el camino que alimenta mi bienestar; me recuerda que cada momento contiene un motivo para estar en paz." },
+      { type: 'phrase', text: "Al cuidar de mi mente y mis pensamientos de manera activa, refuerzo la posibilidad de expirementar la paz y la compasión." },
+      { type: 'phrase', text: "Al cuidar de mi mente y corazón, fortalezco la paz que comparto y construyo una vida en la que el amor propio florece." },
+      { type: 'phrase', text: "La paz crece cuando nutro mi interior con pensamientos de amor y gratitud hacia mí mismo." },
+      { type: 'phrase', text: "Cada acto de autocuidado es un acto de paz; en cada decisión amable conmigo mismo cultivo un entorno de serenidad y fortaleza." },
+      { type: 'phrase', text: "La verdadera abundancia nace del cuidado que me doy a nivel interno; desde ahí, me permito ser un faro de paz." },
+      { type: 'phrase', text: "Nutrir mi paz interior es reconocer que merezco el bienestar y que cada elección consciente fortalece mi camino hacia la armonía." },
+      { type: 'wildcard', text: "Nutrirte no es un lujo, es un acto de perdón. Cuida de ti o sigue tratando de encontrar paz en el agotamiento y el autosabotaje." },
+      { type: 'wildcard', text: "La paz que buscas en otros comienza en el amor que te das a ti mismo. Si no te nutres, no esperes encontrar paz en nada ni en nadie." },
+      { type: 'wildcard', text: "El autocuidado no es egoísmo; es supervivencia. Llena tu vida de compasión hacia ti mismo, o sigue esperando que otros llenen tus vacíos." },
+      { type: 'wildcard', text: "Perdonar es nutrir mi ser con compasión y gratitud; al aceptarme sin condiciones, descubro una paz profunda y permanente." },
+      { type: 'wildcard', text: "El perdón es un acto de autocuidado. Al nutrir mi corazón con compasión y gratitud, construyo una paz interior que ilumina mi vida." },
+      { type: 'wildcard', text: "Mi paz florece al nutrirme con amor y compasión. Al perdonarme, reconozco que el amor que doy a otros empieza en la aceptación de quien soy." }
+    ]
+  }
+};
+
+// --- [ZONA_COMPONENTS: INTERFAZ Y UI] ---
+
+const MethodGuide = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-gray-900 p-6 flex justify-between items-center text-white">
+          <div className="flex items-center gap-3">
+            <BookOpen size={24} />
+            <h2 className="font-serif text-xl font-bold">Guía de Uso</h2>
+          </div>
+          <button onClick={onClose} className="hover:bg-gray-700 p-2 rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-6 text-gray-700">
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2"><Feather size={16}/> El Propósito</h3>
+            <p className="text-sm leading-relaxed">
+              El perdón no es solo para los demás, sino un regalo que nos damos a nosotros mismos. 
+              Estas cartas te guían por las etapas del acrónimo <strong>P.E.R.D.O.N.</strong> para soltar el sufrimiento.
+            </p>
+          </section>
+          <section className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+            <h3 className="font-bold text-gray-900 mb-2">Instrucciones Personales</h3>
+            <ul className="text-sm space-y-2 list-disc list-inside">
+              <li><strong>Uso Diario:</strong> Selecciona una carta que resuene contigo y reflexiona.</li>
+              <li><strong>En Conflicto:</strong> Usa los mazos de <em>Desapego</em> o <em>Responsabilidad</em> para soltar.</li>
+              <li><strong>Diario:</strong> Escribe tus respuestas para anclar el aprendizaje.</li>
+            </ul>
+          </section>
+        </div>
+        <div className="p-4 border-t border-gray-100 bg-gray-50 text-center">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AcronymTracker = ({ currentId, onLetterClick }) => {
+  const letters = [
+    { id: 'percepcion', char: 'P', color: THEME_COLORS.percepcion },
+    { id: 'emocion', char: 'E', color: THEME_COLORS.emocion },
+    { id: 'responsabilidad', char: 'R', color: THEME_COLORS.responsabilidad },
+    { id: 'desapego', char: 'D', color: THEME_COLORS.desapego },
+    { id: 'oportunidad', char: 'O', color: THEME_COLORS.oportunidad },
+    { id: 'nutrir', char: 'N', color: THEME_COLORS.nutrir },
+  ];
+
+  return (
+    <div className="flex gap-2 mb-6 opacity-90">
+      {letters.map((item) => {
+        const isActive = item.id === currentId;
+        return (
+          <button 
+            key={item.id}
+            onClick={() => onLetterClick(item.id)}
+            className={`
+              w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center font-bold text-xs md:text-sm font-serif transition-all duration-500 hover:scale-105 active:scale-95
+              ${isActive ? 'scale-110 shadow-lg text-white' : 'bg-gray-100 text-gray-300 scale-90 hover:bg-gray-200'}
+            `}
+            style={{ backgroundColor: isActive ? item.color : undefined }}
+          >
+            {item.char}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
+const Card = ({ card, color, isFlipped, onClick }) => {
+  // Generamos sutiles degradados laterales basados en el color sólido
+  const gradientOverlay = `linear-gradient(90deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0) 85%, rgba(0,0,0,0.15) 100%)`;
+  
+  return (
+    <div 
+      className="relative w-64 h-96 cursor-pointer perspective-1000 transition-transform duration-500 mx-auto"
+      onClick={onClick}
+    >
+      <div className={`relative w-full h-full duration-700 preserve-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
+        {/* PARTE FRONTAL DE LA CARTA */}
+        <div 
+          className="absolute w-full h-full backface-hidden rounded-xl shadow-2xl flex flex-col items-center justify-center p-6 border-4 border-white"
+          style={{ 
+            backgroundColor: color,
+            backgroundImage: gradientOverlay // Aplicamos el degradado lateral sobre el color sólido
+          }}
+        >
+          <div className="border-2 border-white/30 w-full h-full rounded-lg flex items-center justify-center">
+            <Feather size={64} className="text-white/80" />
+          </div>
+          <div className="absolute bottom-6 text-white font-serif tracking-widest text-sm">P.E.R.D.O.N.</div>
+        </div>
+        
+        {/* PARTE TRASERA DE LA CARTA (CONTENIDO) */}
+        <div 
+          className="absolute w-full h-full backface-hidden rotate-y-180 rounded-xl shadow-2xl bg-white flex flex-col items-center justify-between p-6 border-t-8"
+          style={{ borderColor: color }}
+        >
+          <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mt-2 text-center">
+            {card.type === 'wildcard' ? 'Comodín' : card.type === 'question' ? 'Pregunta' : 'Reflexión'}
+          </div>
+          <div className="flex-1 flex items-center justify-center text-center">
+            <p className="font-serif text-gray-800 text-lg leading-relaxed px-2">
+              {card.text}
+            </p>
+          </div>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: color }}>
+            {card.categoryLetter}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ReflectionJournal = ({ categoryId, cardText, onClose }) => {
+  const [entry, setEntry] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [aiResponse, setAiResponse] = useState('');
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  const formatAiResponse = (text) => {
+    const cleanText = text.replace(/^\*\*|\*\*$/g, '').trim();
+    const parts = cleanText.split(/(Consejo práctico:|Sugerencia:|Acción recomendada:)/gi);
+    if (parts.length > 1) {
+      return (
+        <div className="space-y-3">
+          <span className="block">{parts[0]}</span>
+          <span className="block border-t border-indigo-200 pt-2 font-bold text-indigo-900">
+            {parts[1]} {parts[2]}
+          </span>
+        </div>
+      );
+    }
+    return <p>{cleanText}</p>;
+  };
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => onClose(), 2000); 
+  };
+
+  const handleAIExpand = async () => {
+    setLoadingAI(true);
+    const categoryName = CATEGORIES[categoryId]?.name || 'Perdón';
+    const prompt = `Actúa como un coach de perdón experto y empático usando el método P.E.R.D.O.N. El usuario está en la fase de '${categoryName}'. 
+    La carta dice: "${cardText}". 
+    El usuario escribió esta reflexión: "${entry}".
+    Por favor:
+    1. Valida sus sentimientos brevemente.
+    2. Ofrécele una pregunta profunda o una perspectiva suave.
+    3. Finaliza con una nueva línea que empiece exactamente con "Consejo práctico:" seguido de una acción concreta.
+    REGLA CRÍTICA: NO USES DOBLE ASTERISCO (**) AL INICIO O FINAL DE LA RESPUESTA NI EN LOS TÍTULOS.
+    Mantén la respuesta corta (máximo 70 palabras), cálida y en español.`;
+
+    const response = await callGemini(prompt);
+    setAiResponse(response);
+    setLoadingAI(false);
+  };
+
+  if (saved) {
+    return (
+      <div className="bg-green-50 p-8 rounded-lg text-center animate-fade-in w-full max-w-2xl mx-auto">
+        <Heart className="w-12 h-12 text-green-500 mx-auto mb-4" />
+        <h3 className="text-xl font-serif text-green-800 mb-2">Reflexión Guardada</h3>
+        <p className="text-green-600">Tu proceso de introspección ha sido registrado.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto mt-8 border border-gray-100 w-full">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-gray-500">
+          <PenTool size={18} />
+          <span className="text-sm uppercase tracking-wide font-bold">Diario de Reflexión</span>
+        </div>
+      </div>
+      <p className="italic text-gray-600 mb-4 border-l-4 border-gray-200 pl-4 py-2 bg-gray-50 text-sm">
+        "{cardText}"
+      </p>
+      <textarea
+        className="w-full h-32 p-4 border border-gray-200 rounded-md focus:ring-2 focus:ring-opacity-50 focus:outline-none transition-all resize-none text-gray-700 font-serif"
+        style={{ '--tw-ring-color': CATEGORIES[categoryId]?.color || '#000' }}
+        placeholder="Escribe aquí tus pensamientos..."
+        value={entry}
+        onChange={(e) => setEntry(e.target.value)}
+      />
+      {loadingAI && (
+        <div className="mt-4 p-4 bg-slate-50 rounded-lg flex items-center justify-center gap-2 text-gray-500 animate-pulse">
+           <Loader className="animate-spin" size={16} /> Conectando con tu coach interior...
+        </div>
+      )}
+      {aiResponse && !loadingAI && (
+        <div className="mt-4 p-5 rounded-lg bg-indigo-50 border border-indigo-100 animate-fade-in">
+          <div className="flex items-center gap-2 mb-3 text-indigo-800 font-bold text-xs uppercase tracking-wider">
+             <Sparkles size={14} /> Perspectiva P.E.R.D.O.N.
+          </div>
+          <div className="text-gray-700 text-sm font-serif leading-relaxed text-justify">
+            {formatAiResponse(aiResponse)}
+          </div>
+        </div>
+      )}
+      <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+        <button
+            onClick={handleAIExpand}
+            disabled={!entry.trim() || loadingAI}
+            className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-colors ${!entry.trim() ? 'text-gray-300 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
+        >
+            <Sparkles size={16} />
+            {aiResponse ? 'Nueva Perspectiva' : 'Profundizar con IA'}
+        </button>
+        <div className="flex gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-md transition-colors text-sm">Omitir</button>
+            <button 
+              onClick={handleSave} 
+              disabled={!entry.trim()} 
+              className="px-6 py-2 text-white rounded-md shadow-md flex items-center gap-2 disabled:opacity-50 text-sm font-bold"
+              style={{ backgroundColor: CATEGORIES[categoryId]?.color || '#000' }}
+            >
+              <FileText size={16} /> Guardar
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- [ZONA_LOGIC: LÓGICA DE NEGOCIO Y ESTADO] ---
+
+export default function App() {
+  const [view, setView] = useState('home'); 
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [currentCard, setCurrentCard] = useState(null);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
+  const [showReflection, setShowReflection] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [cardInsight, setCardInsight] = useState(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
+
+  const catData = selectedCategory ? CATEGORIES[selectedCategory] : null;
+
+  const handleSelectCategory = (key) => {
+    setSelectedCategory(key);
+    setView('drawing');
+    setIsCardFlipped(false);
+    setShowReflection(false);
+    setCurrentCard(null);
+    setCardInsight(null);
+  };
+
+  const drawCard = () => {
+    if (!catData) return;
+    const randomCard = catData.cards[Math.floor(Math.random() * catData.cards.length)];
+    setCurrentCard({ ...randomCard, categoryLetter: catData.letter });
+    setCardInsight(null);
+    setIsCardFlipped(false);
+    setTimeout(() => setIsCardFlipped(true), 150);
+  };
+
+  const getQuickInsight = async () => {
+    if (!currentCard || !catData) return;
+    setLoadingInsight(true);
+    const prompt = `Actúa como un experto en el método P.E.R.D.O.N. Explica el propósito profundo de esta carta: "${currentCard.text}" para la fase '${catData.name}'. 
+    Separa tu respuesta en dos párrafos. El segundo párrafo debe empezar con "Consejo práctico:" y ser una acción clara. 
+    REGLA CRÍTICA: NO USES DOBLE ASTERISCO (**) AL INICIO O FINAL DE LA RESPUESTA.
+    Manténlo breve, profesional, texto justificado y en español.`;
+    const response = await callGemini(prompt);
+    setCardInsight(response);
+    setLoadingInsight(false);
+  };
+
+  const formatCardInsight = (text) => {
+    const cleanText = text.replace(/^\*\*|\*\*$/g, '').trim();
+    const parts = cleanText.split(/(Consejo práctico:|Sugerencia:|Acción recomendada:)/gi);
+    if (parts.length > 1) {
+      return (
+        <div className="text-justify space-y-3">
+          <p>{parts[0]}</p>
+          <div className="border-t border-indigo-100 pt-2">
+            <strong className="text-indigo-900">{parts[1]}</strong> {parts[2]}
+          </div>
+        </div>
+      );
+    }
+    return <p className="text-justify">{cleanText}</p>;
+  };
+
+  const resetJourney = () => {
+    setView('selection');
+    setSelectedCategory(null);
+    setCurrentCard(null);
+    setIsCardFlipped(false);
+    setShowReflection(false);
+    setCardInsight(null);
+  };
+
+  // --- [ZONA_RENDER: RENDERIZADO PRINCIPAL] ---
+
+  if (view === 'home') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center relative">
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-8 flex justify-center">
+            <div className="w-20 h-20 bg-gray-900 text-white rounded-full flex items-center justify-center text-3xl font-serif font-bold shadow-xl">P</div>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-serif text-gray-900 mb-4 tracking-tight">Método P.E.R.D.O.N.</h1>
+          <p className="text-xl text-gray-600 mb-8 font-light italic">"Tu camino hacia la paz interior comienza aquí"</p>
+          <button onClick={() => setView('selection')} className="px-8 py-4 bg-gray-900 text-white text-lg rounded-full shadow-lg hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto">
+            Iniciar Viaje <BookOpen size={20} />
+          </button>
+        </div>
+        <button onClick={() => setShowGuide(true)} className="fixed bottom-6 right-6 bg-white p-3 rounded-full shadow-lg border border-gray-100 hover:bg-gray-50"><HelpCircle size={24} /></button>
+        <MethodGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
+      </div>
+    );
+  }
+
+  if (view === 'selection') {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+        <header className="max-w-6xl mx-auto mb-8 flex justify-between items-center">
+          <button onClick={() => setView('home')} className="text-gray-500 hover:text-gray-900 flex items-center gap-2 transition-colors font-bold uppercase tracking-widest text-xs"><ArrowLeft size={20} /> Inicio</button>
+          <h2 className="text-xl font-serif font-bold text-gray-800">Selecciona un Mazo</h2>
+        </header>
+        <div className="max-w-6xl mx-auto space-y-12">
+          {Object.keys(PHASES).map((phaseKey) => (
+            <section key={phaseKey} className="animate-fade-in-up">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-px flex-1 bg-gray-200"></div>
+                <span className="text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-white" style={{ backgroundColor: PHASES[phaseKey].color }}>{PHASES[phaseKey].title}</span>
+                <div className="h-px flex-1 bg-gray-200"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                {PHASES[phaseKey].categories.map((catKey) => {
+                  const cat = CATEGORIES[catKey];
+                  return (
+                    <button 
+                      key={catKey} 
+                      onClick={() => handleSelectCategory(catKey)} 
+                      className="group relative rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col items-center justify-center text-center p-8 overflow-hidden border-2 border-white/20 min-h-[192px]"
+                      style={{ backgroundColor: cat.color }}
+                    >
+                      <div className="z-10 w-full flex flex-col items-center">
+                        <div className="h-12 flex items-center justify-center mb-2">
+                           <h3 className="text-3xl font-serif font-bold text-white tracking-tight group-hover:scale-105 transition-transform duration-300">{cat.name}</h3>
+                        </div>
+                        <div className="h-12 flex items-center justify-center">
+                           <p className="text-white/80 text-sm max-w-[280px] font-light leading-snug">{cat.description}</p>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!catData) return null;
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
+      <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b border-gray-100 sticky top-0 z-30">
+        <button onClick={resetJourney} className="text-gray-500 hover:text-gray-900 flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors"><ArrowLeft size={18} /> Mazos</button>
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 leading-none mb-1">{catData.phase}</span>
+          <span className="text-lg font-serif font-bold" style={{ color: catData.color }}>{catData.name}</span>
+        </div>
+        <div className="w-16"></div>
+      </nav>
+
+      <main className="flex-1 flex flex-col items-center p-6 relative">
+        <div className="z-10 mb-4">
+          <AcronymTracker currentId={selectedCategory} onLetterClick={handleSelectCategory} />
+        </div>
+        
+        {!currentCard ? (
+          <div className="z-10 animate-fade-in text-center flex-1 flex flex-col justify-center">
+            <div onClick={drawCard} className="w-64 h-96 rounded-xl shadow-xl flex items-center justify-center cursor-pointer hover:-translate-y-2 transition-transform duration-300 mx-auto border-4 border-white" style={{ backgroundColor: catData.color }}>
+              <RefreshCw size={48} className="text-white opacity-80" />
+            </div>
+            <p className="mt-6 text-gray-400 font-serif italic">Pulsa el mazo para sacar una carta</p>
+          </div>
+        ) : (
+          <div className="w-full max-w-4xl z-10 flex flex-col items-center">
+            <Card card={currentCard} color={catData.color} isFlipped={isCardFlipped} onClick={() => setIsCardFlipped(!isCardFlipped)} />
+            
+            <div className={`mt-10 mb-20 w-full transition-all duration-700 ${isCardFlipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              {!showReflection ? (
+                <div className="flex flex-col items-center gap-6">
+                  <div className="flex gap-4">
+                    <button onClick={drawCard} className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-full shadow hover:bg-gray-50 transition-all border border-gray-100 text-sm font-medium"><RefreshCw size={18} /> Otra carta</button>
+                    <button onClick={() => setShowReflection(true)} className="flex items-center gap-2 px-8 py-3 text-white rounded-full shadow-lg hover:scale-105 transition-all text-sm font-bold" style={{ backgroundColor: catData.color }}><PenTool size={18} /> Escribir Reflexión</button>
+                  </div>
+                  
+                  <div className="w-full max-w-lg">
+                    {!cardInsight ? (
+                       <button onClick={getQuickInsight} disabled={loadingInsight} className="mx-auto flex items-center gap-2 text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-[0.2em] transition-all">
+                         {loadingInsight ? <Loader className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                         {loadingInsight ? 'Consultando IA...' : 'Interpretación Profunda'}
+                       </button>
+                    ) : (
+                      <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl border border-indigo-100 shadow-lg animate-fade-in-up relative">
+                        <button onClick={() => setCardInsight(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={16}/></button>
+                        <div className="flex items-center gap-2 mb-3 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Sparkles size={14}/> Guía del Mazo</div>
+                        <div className="text-sm font-serif text-gray-700 leading-relaxed">
+                          {formatCardInsight(cardInsight)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <ReflectionJournal categoryId={selectedCategory} cardText={currentCard.text} onClose={() => setShowReflection(false)} />
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+      <MethodGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
+    </div>
+  );
+}
